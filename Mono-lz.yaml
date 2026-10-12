@@ -6,7 +6,7 @@ resources:
   repositories:
     - repository: templates
       type: git
-      name: Axion-system1/DevOps-Templates
+      name: /DevOps/Azure-Infra
       ref: refs/heads/main
 
 stages:
