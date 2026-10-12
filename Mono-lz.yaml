@@ -37,4 +37,3 @@ stages:
 - template: templates/Apply.yaml@templates
   parameters:
     Apply: ${{ parameters.Apply }}
-```
