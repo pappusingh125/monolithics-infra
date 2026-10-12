@@ -6,7 +6,7 @@ resources:
   repositories:
     - repository: templates
       type: git
-      name: MyProject/DevOps-Templates
+      name: Axion-system1/DevOps-Templates
       ref: refs/heads/main
 
 stages:
