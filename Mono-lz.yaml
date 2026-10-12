@@ -1,0 +1,13 @@
+pool: mypool
+
+trigger: none
+
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: MyProject/DevOps-Templates
+      ref: refs/heads/main
+
+stages:
+  - template: templates/Init.yaml@templates
