@@ -1,7 +1,7 @@
 locals {
   environment = "qa"
   default_tags = {
-    Environment = "QA"
+    Environment = local.environment
     ManagedBy   = "Terraform"
     Project     = "PPS-Monolithics"
     Tier        = "QualityAssurance"

@@ -1,7 +1,7 @@
 locals {
   environment = "prod"
   default_tags = {
-    Environment = "Prod"
+    Environment = local.environment
     ManagedBy   = "Terraform"
     Project     = "PPS-Monolithics"
     Tier        = "Production"

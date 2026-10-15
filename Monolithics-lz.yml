@@ -1,133 +1,171 @@
 pool: mypool
 
 trigger:
-- main
-- '*'
+  - main
+  - '*'
 
 parameters:
   - name: Scan
-    displayName: TFlinkScan
+    displayName: TFLint Scan
     type: boolean
+    default: true
 
   - name: Plan
     displayName: Plan
     type: boolean
+    default: true
 
   - name: Apply
     displayName: Apply
     type: boolean
-    
+    default: false
 
 stages:
   - stage: Scan
-    displayName: TFlink
-    condition: ${{parameters. Scan}}
+    displayName: TFLint Scan
+    condition: ${{ parameters.Scan }}
     dependsOn: []
     jobs:
       - job: Scan
-        displayName: TFlink Scan
+        displayName: TFLint Scan
         steps:
-        - task: PowerShell@2
-          inputs:
-            targetType: 'inline'
-            workingDirectory: '$(Build.SourcesDirectory)\environment\qa'
-            script: |
-              $ErrorActionPreference = "Stop"
+          - task: PowerShell@2
+            displayName: 'Run TFLint Scan'
+            inputs:
+              targetType: 'inline'
+              workingDirectory: '$(Build.SourcesDirectory)/environments/qa'
+              script: |
+                $ErrorActionPreference = "Stop"
 
-              tflint --init
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                # Check if tflint is installed, install or add to PATH if needed
+                if (-not (Get-Command tflint -ErrorAction SilentlyContinue)) {
+                  Write-Host "tflint not found in PATH. Checking alternative locations or installing..."
+                  if (Test-Path "$env:ProgramFiles\tflint\tflint.exe") {
+                    $env:Path += ";$env:ProgramFiles\tflint"
+                  } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+                    choco install tflint -y
+                  } else {
+                    Write-Host "Downloading tflint binary..."
+                    New-Item -ItemType Directory -Force -Path "$env:ProgramFiles\tflint" | Out-Null
+                    Invoke-WebRequest -Uri "https://github.com/terraform-linters/tflint/releases/latest/download/tflint_windows_amd64.zip" -OutFile "$env:TEMP\tflint.zip"
+                    Expand-Archive -Path "$env:TEMP\tflint.zip" -DestinationPath "$env:ProgramFiles\tflint" -Force
+                    $env:Path += ";$env:ProgramFiles\tflint"
+                  }
+                }
 
-              tflint --recursive
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                Write-Host "Checking TFLint version..."
+                tflint --version
+
+                Write-Host "Initializing TFLint..."
+                tflint --init
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+                Write-Host "Running TFLint recursive inspection..."
+                tflint --recursive
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   - stage: Plan
     displayName: Plan
-    condition: ${{parameters. Plan}}
+    condition: ${{ parameters.Plan }}
     dependsOn: []
     jobs:
       - job: Plan
         displayName: Plan
         steps:
-        - task: TerraformInstaller@1
-          inputs:
-            terraformVersion: 'latest'
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
 
-        - task: TerraformTask@5
-          inputs:
-            provider: 'azurerm'
-            command: 'init'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/environment\qa'
-            backendServiceArm: 'sharedsvc'
-            backendAzureRmResourceGroupName: 'b18g94'
-            backendAzureRmStorageAccountName: 'tfstatedisk'
-            backendAzureRmContainerName: 'tfstate'
-            backendAzureRmKey: 'pps-qa-tfstate'
+          - task: TerraformTask@5
+            displayName: 'Terraform Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/environments/qa'
+              backendServiceArm: 'sharedsvc'
+              backendAzureRmResourceGroupName: 'b18g94'
+              backendAzureRmStorageAccountName: 'tfstatedisk'
+              backendAzureRmContainerName: 'tfstate'
+              backendAzureRmKey: 'pps-qa-tfstate'
 
-        - task: TerraformTask@5
-          inputs:
-            provider: 'azurerm'
-            command: 'custom'
-            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
-            outputTo: 'console'
-            customCommand: 'fmt'
-            environmentServiceNameAzureRM: 'sharedsvc'
+          - task: TerraformTask@5
+            displayName: 'Terraform Fmt'
+            inputs:
+              provider: 'azurerm'
+              command: 'custom'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/environments/qa'
+              outputTo: 'console'
+              customCommand: 'fmt'
+              environmentServiceNameAzureRM: 'sharedsvc'
 
-        - task: TerraformTask@5
-          inputs:
-            provider: 'azurerm'
-            command: 'validate'
-            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
+          - task: TerraformTask@5
+            displayName: 'Terraform Validate'
+            inputs:
+              provider: 'azurerm'
+              command: 'validate'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/environments/qa'
 
-        - task: TerraformTask@5
-          inputs:
-            provider: 'azurerm'
-            command: 'plan'
-            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
-            environmentServiceNameAzureRM: 'sharedsvc'
+          - task: TerraformTask@5
+            displayName: 'Terraform Plan'
+            inputs:
+              provider: 'azurerm'
+              command: 'plan'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/environments/qa'
+              environmentServiceNameAzureRM: 'sharedsvc'
 
-        - task: TerraformTask@5
-          inputs:
-            provider: 'azurerm'
-            command: 'output'
-            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
-            environmentServiceNameAzureRM: 'sharedsvc'
+          - task: TerraformTask@5
+            displayName: 'Terraform Output'
+            inputs:
+              provider: 'azurerm'
+              command: 'output'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/environments/qa'
+              environmentServiceNameAzureRM: 'sharedsvc'
 
   - stage: Approval
     displayName: Manual Approval
+    dependsOn:
+      - Plan
     pool: server
     jobs:
       - job: Approval
         displayName: Manual Approval
         steps:
-        - task: ManualValidation@1
-          inputs:
-            notifyUsers: 'abc@yaml'
+          - task: ManualValidation@1
+            inputs:
+              notifyUsers: 'abc@yaml'
+              instructions: 'Please review the Terraform Plan output before approving deployment.'
 
   - stage: Apply
     displayName: Apply
-    condition: ${{parameters. Apply}}
-    dependsOn: []
+    condition: and(succeeded(), ${{ parameters.Apply }})
+    dependsOn:
+      - Approval
     jobs:
       - job: Apply
         displayName: Apply
         steps:
-        - task: TerraformTask@5
-          inputs:
-            provider: 'azurerm'
-            command: 'init'
-            workingDirectory: '$(System.DefaultWorkingDirectory)/environment\qa'
-            backendServiceArm: 'sharedsvc'
-            backendAzureRmResourceGroupName: 'b18g94'
-            backendAzureRmStorageAccountName: 'tfstatedisk'
-            backendAzureRmContainerName: 'tfstate'
-            backendAzureRmKey: 'pps-qa-tfstate'
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: 'latest'
 
-        - task: TerraformTask@5
-          inputs:
-            provider: 'azurerm'
-            command: 'apply'
-            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
-            environmentServiceNameAzureRM: 'sharedsvc'
+          - task: TerraformTask@5
+            displayName: 'Terraform Init'
+            inputs:
+              provider: 'azurerm'
+              command: 'init'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/environments/qa'
+              backendServiceArm: 'sharedsvc'
+              backendAzureRmResourceGroupName: 'b18g94'
+              backendAzureRmStorageAccountName: 'tfstatedisk'
+              backendAzureRmContainerName: 'tfstate'
+              backendAzureRmKey: 'pps-qa-tfstate'
 
-        
-        
+          - task: TerraformTask@5
+            displayName: 'Terraform Apply'
+            inputs:
+              provider: 'azurerm'
+              command: 'apply'
+              workingDirectory: '$(System.DefaultWorkingDirectory)/environments/qa'
+              environmentServiceNameAzureRM: 'sharedsvc'
