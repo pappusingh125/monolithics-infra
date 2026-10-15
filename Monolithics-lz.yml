@@ -30,7 +30,7 @@ stages:
         displayName: TFLint Scan
         steps:
           - task: PowerShell@2
-            displayName: 'Run TFLint Scan'
+            displayName: 'TFLint Scan'
             inputs:
               targetType: 'inline'
               workingDirectory: '$(Build.SourcesDirectory)/environments/qa'
