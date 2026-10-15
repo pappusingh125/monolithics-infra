@@ -1,0 +1,133 @@
+pool: mypool
+
+trigger:
+- main
+- '*'
+
+parameters:
+  - name: Scan
+    displayName: TFlinkScan
+    type: boolean
+
+  - name: Plan
+    displayName: Plan
+    type: boolean
+
+  - name: Apply
+    displayName: Apply
+    type: boolean
+    
+
+stages:
+  - stage: Scan
+    displayName: TFlink
+    condition: ${{parameters. Scan}}
+    dependsOn: []
+    jobs:
+      - job: Scan
+        displayName: TFlink Scan
+        steps:
+        - task: PowerShell@2
+          inputs:
+            targetType: 'inline'
+            workingDirectory: '$(Build.SourcesDirectory)\environment\qa'
+            script: |
+              $ErrorActionPreference = "Stop"
+
+              tflint --init
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+              tflint --recursive
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  - stage: Plan
+    displayName: Plan
+    condition: ${{parameters. Plan}}
+    dependsOn: []
+    jobs:
+      - job: Plan
+        displayName: Plan
+        steps:
+        - task: TerraformInstaller@1
+          inputs:
+            terraformVersion: 'latest'
+
+        - task: TerraformTask@5
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/environment\qa'
+            backendServiceArm: 'sharedsvc'
+            backendAzureRmResourceGroupName: 'b18g94'
+            backendAzureRmStorageAccountName: 'tfstatedisk'
+            backendAzureRmContainerName: 'tfstate'
+            backendAzureRmKey: 'pps-qa-tfstate'
+
+        - task: TerraformTask@5
+          inputs:
+            provider: 'azurerm'
+            command: 'custom'
+            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
+            outputTo: 'console'
+            customCommand: 'fmt'
+            environmentServiceNameAzureRM: 'sharedsvc'
+
+        - task: TerraformTask@5
+          inputs:
+            provider: 'azurerm'
+            command: 'validate'
+            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
+
+        - task: TerraformTask@5
+          inputs:
+            provider: 'azurerm'
+            command: 'plan'
+            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
+            environmentServiceNameAzureRM: 'sharedsvc'
+
+        - task: TerraformTask@5
+          inputs:
+            provider: 'azurerm'
+            command: 'output'
+            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
+            environmentServiceNameAzureRM: 'sharedsvc'
+
+  - stage: Approval
+    displayName: Manual Approval
+    pool: server
+    jobs:
+      - job: Approval
+        displayName: Manual Approval
+        steps:
+        - task: ManualValidation@1
+          inputs:
+            notifyUsers: 'abc@yaml'
+
+  - stage: Apply
+    displayName: Apply
+    condition: ${{parameters. Apply}}
+    dependsOn: []
+    jobs:
+      - job: Apply
+        displayName: Apply
+        steps:
+        - task: TerraformTask@5
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/environment\qa'
+            backendServiceArm: 'sharedsvc'
+            backendAzureRmResourceGroupName: 'b18g94'
+            backendAzureRmStorageAccountName: 'tfstatedisk'
+            backendAzureRmContainerName: 'tfstate'
+            backendAzureRmKey: 'pps-qa-tfstate'
+
+        - task: TerraformTask@5
+          inputs:
+            provider: 'azurerm'
+            command: 'apply'
+            workingDirectory: '$(System.DefaultWorkingDirectory)environment\qa'
+            environmentServiceNameAzureRM: 'sharedsvc'
+
+        
+        
